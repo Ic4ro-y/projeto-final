@@ -1,0 +1,45 @@
+[
+  {
+    "id": 2,
+    "nome": "algo",
+    "descricao": "algo",
+    "duracao": 30,
+    "dataInicio": "2025-10-02",
+    "dataFim": "2025-10-31",
+    "status": "ativo",
+    "progresso": [
+      {
+        "dia": 1,
+        "data": "2025-10-02",
+        "cumprido": true,
+        "observacao": "sim"
+      }
+    ],
+    "sequenciaAtual": 1,
+    "maiorSequencia": 1,
+    "estatisticas": {
+      "diasCumpridos": 1,
+      "diasFalhados": 0,
+      "porcentagemSucesso": 100
+    },
+    "conquistas": []
+  },
+  {
+    "id": 3,
+    "nome": "dinheiro",
+    "descricao": "arranjar dinheiro",
+    "duracao": 40,
+    "dataInicio": "2025-10-03",
+    "dataFim": "2025-11-11",
+    "status": "ativo",
+    "progresso": [],
+    "sequenciaAtual": 0,
+    "maiorSequencia": 0,
+    "estatisticas": {
+      "diasCumpridos": 0,
+      "diasFalhados": 0,
+      "porcentagemSucesso": 0
+    },
+    "conquistas": []
+  }
+]
