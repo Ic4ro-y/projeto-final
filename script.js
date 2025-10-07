@@ -1,45 +1,55 @@
 #!/usr/bin/env node
-import fs from "fs/promises";
+import fs from "fs";
 import path from "path";
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { fileURLToPath } from "url";
 
+// ---------------- CONFIGURAÇÕES ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const DB_FILE = path.join(__dirname, "desafios.json");
-const BACKUP_FILE = path.join(__dirname, "backup_desafios.json");
+const BACKUP_FILE = path.join(__dirname, "desafios_backup.json");
 
-// ------------------- UTILITÁRIOS -------------------
-async function carregarDesafios() {
+// ---------------- FUNÇÕES UTILITÁRIAS ----------------
+function carregarDesafios() {
+  if (!fs.existsSync(DB_FILE)) return [];
   try {
-    await fs.access(DB_FILE);
-    const data = await fs.readFile(DB_FILE, "utf8");
-    return JSON.parse(data);
-  } catch {
-    await fs.writeFile(DB_FILE, "[]");
+    return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+  } catch (err) {
+    console.warn(chalk.yellow("⚠️ Arquivo corrompido — recriando..."));
+    fs.writeFileSync(DB_FILE, "[]");
     return [];
   }
 }
 
-async function salvarDesafios(dados) {
-  await fs.writeFile(DB_FILE, JSON.stringify(dados, null, 2));
-  await fs.writeFile(BACKUP_FILE, JSON.stringify(dados, null, 2));
+function salvarDesafios(dados) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(dados, null, 2));
+  fs.writeFileSync(BACKUP_FILE, JSON.stringify(dados, null, 2));
 }
 
 function hojeISO() {
   return new Date().toISOString().split("T")[0];
 }
 
-// ------------------- FUNÇÕES PRINCIPAIS -------------------
+function diasEntreDatas(data1, data2) {
+  const d1 = new Date(data1);
+  const d2 = new Date(data2);
+  return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
+}
+
+async function pausar() {
+  await inquirer.prompt([{ type: "input", name: "cont", message: chalk.gray("Pressione ENTER para continuar...") }]);
+}
+
+// ---------------- FUNÇÕES DE DESAFIOS ----------------
 async function criarDesafio(nome, duracao, descricao) {
-  const desafios = await carregarDesafios();
-  const ultimoId = desafios.length ? desafios[desafios.length - 1].id : 0;
+  const desafios = carregarDesafios();
+  const ultimoId = desafios.length > 0 ? desafios[desafios.length - 1].id : 0;
   const id = ultimoId + 1;
   const inicio = hojeISO();
-  const fim = new Date();
-  fim.setDate(fim.getDate() + Number(duracao) - 1);
+  const dataFim = new Date();
+  dataFim.setDate(dataFim.getDate() + Number(duracao) - 1);
 
   const desafio = {
     id,
@@ -47,230 +57,228 @@ async function criarDesafio(nome, duracao, descricao) {
     descricao,
     duracao: Number(duracao),
     dataInicio: inicio,
-    dataFim: fim.toISOString().split("T")[0],
+    dataFim: dataFim.toISOString().split("T")[0],
     status: "ativo",
     progresso: [],
     sequenciaAtual: 0,
     maiorSequencia: 0,
-    estatisticas: {
-      diasCumpridos: 0,
-      diasFalhados: 0,
-      porcentagemSucesso: 0,
-    },
+    estatisticas: { diasCumpridos: 0, diasFalhados: 0, porcentagemSucesso: 0 },
+    conquistas: [],
   };
 
   desafios.push(desafio);
-  await salvarDesafios(desafios);
+  salvarDesafios(desafios);
   console.log(chalk.green(`✅ Desafio criado: ${nome} (${duracao} dias)`));
 }
 
 async function registrarProgresso(id, cumprido, observacao = "") {
-  const desafios = await carregarDesafios();
+  const desafios = carregarDesafios();
   const desafio = desafios.find((d) => d.id === Number(id));
-  if (!desafio) return console.log(chalk.red("❌ Desafio não encontrado!"));
-
-  const hoje = hojeISO();
-  const ultimoRegistro = desafio.progresso.find((p) => p.data === hoje);
-
-  if (ultimoRegistro) {
-    console.log(
-      chalk.yellow("⚠️ Você já registrou o progresso de hoje! Tentativas extras não afetam a streak.")
-    );
+  if (!desafio) {
+    console.log(chalk.red("❌ Desafio não encontrado!"));
     return;
   }
 
-  const dia = desafio.progresso.length + 1;
+  const hoje = hojeISO();
+  const ultimoRegistro = desafio.progresso.at(-1);
 
-  desafio.progresso.push({
-    dia,
-    data: hoje,
-    cumprido,
-    observacao,
-  });
-
-  if (cumprido) {
-    desafio.sequenciaAtual++;
-    if (desafio.sequenciaAtual > desafio.maiorSequencia)
-      desafio.maiorSequencia = desafio.sequenciaAtual;
-    desafio.estatisticas.diasCumpridos++;
+  if (ultimoRegistro && ultimoRegistro.data === hoje) {
+    // Tentativa extra no mesmo dia — não aumenta streak
+    desafio.progresso.push({ dia: desafio.progresso.length + 1, data: hoje, cumprido, observacao });
+    console.log(chalk.yellow("📅 Tentativa adicional registrada — streak inalterada."));
   } else {
-    desafio.sequenciaAtual = 0;
-    desafio.estatisticas.diasFalhados++;
+    const dia = desafio.progresso.length + 1;
+    desafio.progresso.push({ dia, data: hoje, cumprido, observacao });
+
+    if (cumprido) {
+      if (!ultimoRegistro || diasEntreDatas(ultimoRegistro.data, hoje) >= 1) {
+        desafio.sequenciaAtual++;
+        if (desafio.sequenciaAtual > desafio.maiorSequencia) desafio.maiorSequencia = desafio.sequenciaAtual;
+      }
+      desafio.estatisticas.diasCumpridos++;
+    } else {
+      desafio.sequenciaAtual = 0;
+      desafio.estatisticas.diasFalhados++;
+    }
+
+    const totalDias = desafio.estatisticas.diasCumpridos + desafio.estatisticas.diasFalhados;
+    desafio.estatisticas.porcentagemSucesso =
+      totalDias > 0 ? Number(((desafio.estatisticas.diasCumpridos / totalDias) * 100).toFixed(1)) : 0;
+
+    if (desafio.estatisticas.diasCumpridos === desafio.duracao) {
+      desafio.status = "concluído";
+      console.log(chalk.greenBright("🎉 Parabéns! Você concluiu este desafio!"));
+    }
+
+    console.log(chalk.green("📆 Progresso registrado com sucesso!"));
   }
 
-  const total = desafio.estatisticas.diasCumpridos + desafio.estatisticas.diasFalhados;
-  desafio.estatisticas.porcentagemSucesso = total
-    ? ((desafio.estatisticas.diasCumpridos / total) * 100).toFixed(1)
-    : 0;
-
-  await salvarDesafios(desafios);
-  console.log(chalk.blueBright(`📅 Progresso registrado para: ${desafio.nome}`));
+  salvarDesafios(desafios);
 }
 
 async function listarDesafios() {
-  const desafios = await carregarDesafios();
-  if (desafios.length === 0) {
-    console.log(chalk.gray("📭 Nenhum desafio cadastrado."));
+  const dados = carregarDesafios();
+  if (!dados.length) {
+    console.log(chalk.yellow("📭 Nenhum desafio cadastrado."));
     return;
   }
 
-  console.log(chalk.bold("\n📋 Desafios Atuais:"));
-  desafios.forEach((d) => {
-    const statusCor =
-      d.status === "concluido"
-        ? chalk.green
-        : d.status === "abandonado"
-        ? chalk.red
-        : chalk.yellow;
+  console.log(chalk.cyanBright("\n📋 Lista de Desafios:"));
+  dados.forEach((d) =>
     console.log(
-      `${chalk.cyan(`[${d.id}]`)} ${chalk.bold(d.nome)} - ${statusCor(
-        d.status
-      )} | ${d.duracao} dias | Sucesso: ${d.estatisticas.porcentagemSucesso}%`
-    );
-  });
+      chalk.white(`[${d.id}] `) +
+        chalk.bold(d.nome) +
+        ` - ${chalk.gray(d.status)} (${d.duracao} dias)` +
+        chalk.green(` | ${d.estatisticas.porcentagemSucesso}% sucesso`)
+    )
+  );
 }
 
 async function analisarDesafio() {
-  const desafios = await carregarDesafios();
-  if (desafios.length === 0) return console.log(chalk.gray("📭 Nenhum desafio disponível."));
+  const desafios = carregarDesafios();
+  if (!desafios.length) {
+    console.log(chalk.yellow("📭 Nenhum desafio para analisar."));
+    return;
+  }
 
   const { id } = await inquirer.prompt([
-    {
-      type: "list",
-      name: "id",
-      message: "Escolha um desafio para analisar:",
-      choices: desafios.map((d) => ({ name: d.nome, value: d.id })),
-    },
+    { type: "rawlist", name: "id", message: "Escolha um desafio:", choices: desafios.map((d) => ({ name: d.nome, value: d.id })) },
   ]);
 
   const desafio = desafios.find((d) => d.id === id);
-  console.log(chalk.bold(`\n📊 Análise de ${desafio.nome}`));
-  console.log(`Descrição: ${desafio.descricao}`);
-  console.log(`Duração: ${desafio.duracao} dias`);
-  console.log(`Dias cumpridos: ${desafio.estatisticas.diasCumpridos}`);
-  console.log(`Dias falhados: ${desafio.estatisticas.diasFalhados}`);
-  console.log(`Maior sequência: ${desafio.maiorSequencia}`);
-  console.log(`Taxa de sucesso: ${desafio.estatisticas.porcentagemSucesso}%`);
+
+  console.log(chalk.magentaBright(`\n📊 Análise do desafio: ${desafio.nome}\n`));
+  console.log(`📅 Início: ${desafio.dataInicio}`);
+  console.log(`🏁 Fim: ${desafio.dataFim}`);
+  console.log(`🔥 Sequência atual: ${desafio.sequenciaAtual}`);
+  console.log(`💪 Maior sequência: ${desafio.maiorSequencia}`);
+  console.log(`✅ Dias cumpridos: ${desafio.estatisticas.diasCumpridos}`);
+  console.log(`❌ Dias falhados: ${desafio.estatisticas.diasFalhados}`);
+  console.log(`📈 Sucesso total: ${desafio.estatisticas.porcentagemSucesso}%`);
 }
 
-async function filtrarPorStatus() {
-  const desafios = await carregarDesafios();
-  const { status } = await inquirer.prompt([
+async function filtrarDesafios() {
+  const desafios = carregarDesafios();
+  if (!desafios.length) {
+    console.log(chalk.yellow("📭 Nenhum desafio para filtrar."));
+    return;
+  }
+
+  const { filtro } = await inquirer.prompt([
     {
-      type: "list",
-      name: "status",
-      message: "Filtrar por status:",
-      choices: ["ativo", "concluido", "abandonado"],
+      type: "rawlist",
+      name: "filtro",
+      message: "Filtrar por:",
+      choices: [
+        { name: "Ativos", value: "ativo" },
+        { name: "Concluídos", value: "concluído" },
+        { name: "Todos", value: "todos" },
+      ],
     },
   ]);
-  const filtrados = desafios.filter((d) => d.status === status);
-  listarDesafios(filtrados);
+
+  const filtrados = filtro === "todos" ? desafios : desafios.filter((d) => d.status === filtro);
+  console.log(chalk.cyanBright(`\n📋 Desafios ${filtro}s:`));
+  filtrados.forEach((d) => console.log(`[${d.id}] ${d.nome} - ${d.status} (${d.duracao} dias)`));
 }
 
 async function deletarDesafio() {
-  const desafios = await carregarDesafios();
-  if (desafios.length === 0) return console.log(chalk.gray("📭 Nenhum desafio para deletar."));
+  const desafios = carregarDesafios();
+  if (!desafios.length) {
+    console.log(chalk.yellow("📭 Nenhum desafio para deletar."));
+    return;
+  }
 
   const { id } = await inquirer.prompt([
-    {
-      type: "list",
-      name: "id",
-      message: "Selecione um desafio para deletar:",
-      choices: desafios.map((d) => ({ name: d.nome, value: d.id })),
-    },
+    { type: "rawlist", name: "id", message: "Selecione o desafio para excluir:", choices: desafios.map((d) => ({ name: d.nome, value: d.id })) },
   ]);
 
-  const novos = desafios.filter((d) => d.id !== id);
-  await salvarDesafios(novos);
-  console.log(chalk.red("🗑️ Desafio deletado com sucesso."));
+  const atualizados = desafios.filter((d) => d.id !== id);
+  salvarDesafios(atualizados);
+  console.log(chalk.redBright("🗑️ Desafio removido com sucesso."));
 }
 
-// ------------------- MENU -------------------
+// ---------------- MENU PRINCIPAL ----------------
 async function menu() {
+  console.log(chalk.cyanBright("🏆 APP DE DESAFIOS PESSOAIS"));
+  console.log(chalk.gray("====================================\n"));
+
   let sair = false;
+
   while (!sair) {
     const { opcao } = await inquirer.prompt([
       {
-        type: "list",
+        type: "rawlist",
         name: "opcao",
         message: chalk.magenta("O que você deseja fazer?"),
         choices: [
-          { name: "Criar desafio", value: "criar" },
-          { name: "Ver todos os desafios", value: "listar" },
-          { name: "Analisar desafio", value: "analisar" },
-          { name: "Registrar progresso", value: "registrar" },
-          { name: "Filtrar por status", value: "filtrar" },
-          { name: "Deletar desafio", value: "deletar" },
-          { name: "Sair", value: "sair" },
+          { name: "📘 Criar novo desafio", value: "criar" },
+          { name: "📋 Ver todos os desafios", value: "listar" },
+          { name: "🔍 Analisar desafio", value: "analisar" },
+          { name: "🧭 Filtrar desafios", value: "filtrar" },
+          { name: "🗓️ Registrar progresso", value: "registrar" },
+          { name: "❌ Deletar desafio", value: "deletar" },
+          new inquirer.Separator(),
+          { name: "🚪 Sair", value: "sair" },
         ],
       },
     ]);
 
-    try {
-      switch (opcao) {
-        case "criar": {
-          const novo = await inquirer.prompt([
-            { type: "input", name: "nome", message: "Nome do desafio:" },
-            {
-              type: "number",
-              name: "duracao",
-              message: "Duração (dias):",
-              default: 30,
-              validate: (v) => (v > 0 ? true : "Informe um número válido."),
-            },
-            { type: "input", name: "descricao", message: "Descrição:" },
-          ]);
-          await criarDesafio(novo.nome, novo.duracao, novo.descricao);
+    switch (opcao) {
+      case "criar":
+        const novo = await inquirer.prompt([
+          { type: "input", name: "nome", message: "Nome do desafio:" },
+          { type: "number", name: "duracao", message: "Duração (dias):", default: 30 },
+          { type: "input", name: "descricao", message: "Descrição:" },
+        ]);
+        await criarDesafio(novo.nome, novo.duracao, novo.descricao);
+        await pausar();
+        break;
+      case "listar":
+        await listarDesafios();
+        await pausar();
+        break;
+      case "analisar":
+        await analisarDesafio();
+        await pausar();
+        break;
+      case "filtrar":
+        await filtrarDesafios();
+        await pausar();
+        break;
+      case "registrar":
+        const desafios = carregarDesafios();
+        if (!desafios.length) {
+          console.log(chalk.yellow("📭 Nenhum desafio para registrar!"));
+          await pausar();
           break;
         }
-
-        case "listar":
-          await listarDesafios();
-          break;
-
-        case "analisar":
-          await analisarDesafio();
-          break;
-
-        case "registrar": {
-          const desafios = await carregarDesafios();
-          if (desafios.length === 0)
-            return console.log(chalk.gray("📭 Nenhum desafio para registrar."));
-          const { id } = await inquirer.prompt([
-            {
-              type: "list",
-              name: "id",
-              message: "Escolha o desafio:",
-              choices: desafios.map((d) => ({ name: d.nome, value: d.id })),
-            },
-          ]);
-          const { cumprido, obs } = await inquirer.prompt([
-            { type: "confirm", name: "cumprido", message: "Cumpriu hoje?", default: true },
-            { type: "input", name: "obs", message: "Observação (opcional):" },
-          ]);
-          await registrarProgresso(id, cumprido, obs);
-          break;
-        }
-
-        case "filtrar":
-          await filtrarPorStatus();
-          break;
-
-        case "deletar":
-          await deletarDesafio();
-          break;
-
-        case "sair":
-          sair = true;
-          console.log(chalk.green("👋 Até mais! Continue firme nos seus desafios!"));
-          break;
-      }
-    } catch (err) {
-      console.log(chalk.red("❌ Erro no aplicativo:"), err.message);
+        const { id } = await inquirer.prompt([
+          { type: "rawlist", name: "id", message: "Escolha o desafio:", choices: desafios.map((d) => ({ name: `${d.id} - ${d.nome}`, value: d.id })) },
+        ]);
+        const { cumprido, obs } = await inquirer.prompt([
+          { type: "confirm", name: "cumprido", message: "Cumpriu hoje?", default: true },
+          { type: "input", name: "obs", message: "Observação (opcional):" },
+        ]);
+        await registrarProgresso(id, cumprido, obs);
+        await pausar();
+        break;
+      case "deletar":
+        await deletarDesafio();
+        await pausar();
+        break;
+      case "sair":
+        sair = true;
+        console.clear();
+        console.log(chalk.greenBright("\n👋 Até mais! Continue firme nos seus desafios!\n"));
+        break;
     }
   }
 }
 
-// ------------------- INÍCIO -------------------
-console.log(chalk.cyanBright("🏆 Bem-vindo ao APP de Desafios Pessoais!"));
-await menu();
+// ---------------- INÍCIO ----------------
+(async () => {
+  console.clear();
+  console.log(chalk.cyanBright("🏆 Bem-vindo ao APP de Desafios Pessoais!\n"));
+  await menu();
+})();
