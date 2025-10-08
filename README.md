@@ -4,9 +4,26 @@
 Cria desafios para serem completos diariamente
 
 ## Funcionalidades
-- [ ] Funcionalidade 1
-- [ ] Funcionalidade 2
-- [ ] ...
+
+ Criar novo desafio (nome, duração e descrição)
+
+ Registrar progresso diário (cumprido ou não)
+
+ Calcular sequência atual e maior sequência (streak)
+
+ Exibir lista completa de desafios
+
+ Analisar um desafio específico (estatísticas e desempenho)
+
+ Atualizar ou excluir desafios
+
+ Sistema de persistência (salva tudo em desafios.json)
+
+ Backup automático de dados
+
+ Menu interativo via terminal com inquirer
+
+ Validações e feedbacks visuais com chalk
 
 ## Como Executar
 1. Clone o repositório
@@ -14,12 +31,35 @@ Cria desafios para serem completos diariamente
 4. Execute `node script.js`
 
 ## Tecnologias Utilizadas
-- Node.js
-- @inquirer/prompts
-- File System (fs)
+
+Node.js — ambiente de execução
+Inquirer.js — menus interativos no terminal
+Chalk — interface colorida e feedback visual
+File System (fs.promises) — leitura e gravação do banco local (desafios.json)
+JSON — estrutura de dados persistente
 
 ## Estrutura de Dados
-Inicialmente deve-se declarar as variáveis(const...), fazer funções com as necessidade específicas(function ...),usar as estruturas de controle e usar entrada(console.log) e saida (prompt) de dados,além disso ainda é importante destacar a importancia dos operadores(+,-,*...).
+{
+  id: 1,
+  nome: "30 Dias de Exercício",
+  descricao: "Fazer pelo menos 30 min de exercício por dia",
+  duracao: 30,
+  dataInicio: "2024-01-01",
+  dataFim: "2024-01-30",
+  status: "ativo",
+  progresso: [
+    { dia: 1, data: "2024-01-01", cumprido: true, observacao: "Corrida 40 min" },
+    { dia: 2, data: "2024-01-02", cumprido: false, observacao: "Chuva, não consegui" }
+  ],
+  sequenciaAtual: 1,
+  maiorSequencia: 5,
+  estatisticas: {
+    diasCumpridos: 25,
+    diasFalhados: 5,
+    porcentagemSucesso: 83.3
+  },
+  conquistas: []
+}
 
 ## Capturas de Tela
 ![alt text](image.png)
