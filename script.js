@@ -218,7 +218,6 @@ async function menu() {
           { name: "🧭 Filtrar desafios", value: "filtrar" },
           { name: "🗓️ Registrar progresso", value: "registrar" },
           { name: "❌ Deletar desafio", value: "deletar" },
-          new inquirer.Separator(),
           { name: "🚪 Sair", value: "sair" },
         ],
       },

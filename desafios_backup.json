@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": 1,
+    "nome": "teste",
+    "descricao": "teste 1",
+    "duracao": 5,
+    "dataInicio": "2025-10-08",
+    "dataFim": "2025-10-12",
+    "status": "ativo",
+    "progresso": [],
+    "sequenciaAtual": 0,
+    "maiorSequencia": 0,
+    "estatisticas": {
+      "diasCumpridos": 0,
+      "diasFalhados": 0,
+      "porcentagemSucesso": 0
+    },
+    "conquistas": []
+  }
+]
