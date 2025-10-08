@@ -62,7 +62,7 @@ JSON — estrutura de dados persistente
 }
 
 ## Capturas de Tela
-![alt text](image.png)
+![alt text](image-1.png)
 
 ## Autor
 Igor Ryan Wachholz
